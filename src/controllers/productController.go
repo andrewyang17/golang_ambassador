@@ -29,6 +29,8 @@ func CreateProducts(c *fiber.Ctx) error {
 
 	database.DB.Create(&product)
 
+	go database.ClearCache("products_frontend", "products_backend")
+
 	return c.JSON(product)
 }
 
@@ -54,14 +56,9 @@ func UpdateProduct(c *fiber.Ctx) error {
 
 	database.DB.Model(&product).Updates(&product)
 
-	go DeleteCache("product_frontend")
-	go DeleteCache("product_backend")
+	go database.ClearCache("products_frontend", "products_backend")
 
 	return c.JSON(product)
-}
-
-func DeleteCache(key string) {
-	database.Cache.Del(context.Background(), key)
 }
 
 func DeleteProduct(c *fiber.Ctx) error {
@@ -71,6 +68,8 @@ func DeleteProduct(c *fiber.Ctx) error {
 
 	database.DB.Delete(&product)
 
+	go database.ClearCache("products_frontend", "products_backend")
+
 	return nil
 }
 
@@ -79,15 +78,18 @@ func ProductsFrontend(c *fiber.Ctx) error {
 	var ctx = context.Background()
 
 	result, err := database.Cache.Get(ctx, "products_frontend").Result()
+
 	if err != nil {
 		database.DB.Find(&products)
+
 		bytes, err := json.Marshal(products)
+
 		if err != nil {
 			panic(err)
 		}
 
-		if err := database.Cache.Set(ctx, "products_frontend", bytes, 30*time.Minute); err != nil {
-			panic(err)
+		if errKey := database.Cache.Set(ctx, "products_frontend", bytes, 30*time.Minute).Err(); errKey != nil {
+			panic(errKey)
 		}
 
 	} else {
